@@ -1,4 +1,6 @@
 use super::*;
+use crate::scalar::{ORDER, ORDER_HALF};
+use sha2::{Digest, Sha256};
 
 fn negate_point(p: &Point) -> Point {
     if p == &Point::INFINITY {
@@ -185,4 +187,58 @@ fn test_generator_coordinates() {
 
     assert_eq!(x.to_int(), expected_x);
     assert_eq!(y.to_int(), expected_y);
+}
+
+#[test]
+fn test_ecdsa_sign_and_verify_roundtrip() {
+    let mut msg = Sha256::new();
+    msg.update(b"deterministic message");
+    let hash: [u8; 32] = msg.finalize().into();
+
+    let mut sk_bytes = [0u8; 32];
+    sk_bytes[31] = 1;
+    let sk = Scalar::from_bytes_mod_order(sk_bytes);
+    let pk = Point::generator().mul_scalar(&sk);
+
+    let (r, s) = ecdsa_sign(&sk, hash).expect("signing should succeed");
+    assert!(ecdsa_verify(&pk, (r, s), hash));
+}
+
+#[test]
+fn test_ecdsa_sign_deterministic() {
+    let mut msg = Sha256::new();
+    msg.update(b"same message");
+    let hash: [u8; 32] = msg.finalize().into();
+
+    let mut sk_bytes = [0u8; 32];
+    sk_bytes[31] = 5;
+    let sk = Scalar::from_bytes_mod_order(sk_bytes);
+
+    let sig1 = ecdsa_sign(&sk, hash).expect("first signature");
+    let sig2 = ecdsa_sign(&sk, hash).expect("second signature");
+    assert_eq!(sig1, sig2, "RFC6979 signatures must be deterministic");
+}
+
+#[test]
+fn test_ecdsa_sign_low_s() {
+    let mut msg = Sha256::new();
+    msg.update(b"low s check");
+    let hash: [u8; 32] = msg.finalize().into();
+
+    let mut sk_bytes = [0u8; 32];
+    sk_bytes[31] = 9;
+    let sk = Scalar::from_bytes_mod_order(sk_bytes);
+    let (r, s) = ecdsa_sign(&sk, hash).expect("signatures should be generated");
+    assert!(ecdsa_verify(
+        &Point::generator().mul_scalar(&sk),
+        (r, s),
+        hash
+    ));
+
+    let s_int = s.to_int();
+    assert!(
+        !Scalar::is_ge(&s_int, &ORDER_HALF),
+        "s should be in low half of order"
+    );
+    assert!(!Scalar::is_ge(&r.to_int(), &ORDER));
 }
