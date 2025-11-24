@@ -255,8 +255,10 @@ impl fmt::Debug for FieldElement {
 pub fn field_to_bytes(f: &FieldElement) -> [u8; 32] {
     let limbs = f.to_int();
     let mut out = [0u8; 32];
-    for (i, limb) in limbs.iter().enumerate() {
-        out[i * 8..(i + 1) * 8].copy_from_slice(&limb.to_be_bytes());
-    }
+    // limbs are stored little-endian; emit big-endian bytes most-significant limb first
+    out[0..8].copy_from_slice(&limbs[3].to_be_bytes());
+    out[8..16].copy_from_slice(&limbs[2].to_be_bytes());
+    out[16..24].copy_from_slice(&limbs[1].to_be_bytes());
+    out[24..32].copy_from_slice(&limbs[0].to_be_bytes());
     out
 }
