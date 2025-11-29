@@ -1,5 +1,5 @@
 use std::fmt;
-use std::ops::{Add, Mul, Sub};
+use std::ops::{Add, Mul, Neg, Sub};
 
 // p = 2^256 - 2^32 - 977
 const MODULUS: [u64; 4] = [
@@ -237,6 +237,18 @@ impl Mul for FieldElement {
     type Output = Self;
     fn mul(self, other: Self) -> Self {
         self.mul_mont(&other)
+    }
+}
+
+impl Neg for FieldElement {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        if self == Self::ZERO {
+            Self::ZERO
+        } else {
+            Self::new(Self::sub_limbs(&MODULUS, &self.limbs))
+        }
     }
 }
 

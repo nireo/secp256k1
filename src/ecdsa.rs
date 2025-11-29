@@ -9,10 +9,7 @@ type HmacSha256 = Hmac<Sha256>;
 /// Generate a keypair from 32 bytes of entropy.
 /// Returns None if the derived scalar is zero (invalid secret key).
 pub fn generate_keypair(secret: [u8; 32]) -> Option<(Scalar, Point)> {
-    let sk = Scalar::from_bytes_mod_order(secret);
-    if sk.is_zero() {
-        return None;
-    }
+    let sk = Scalar::from_bytes_nonzero(secret)?;
     let pk = Point::generator().mul_scalar(&sk);
     Some((sk, pk))
 }
@@ -140,7 +137,7 @@ pub fn ecdsa_verify(pk: &Point, sig: (Scalar, Scalar), msg_hash: [u8; 32]) -> bo
 
 /// Helper to sign using raw bytes.
 pub fn ecdsa_sign_bytes(secret: [u8; 32], msg_hash: [u8; 32]) -> Option<([u8; 32], [u8; 32])> {
-    let sk = Scalar::from_bytes_mod_order(secret);
+    let sk = Scalar::from_bytes_nonzero(secret)?;
     let (r, s) = ecdsa_sign(&sk, msg_hash)?;
     Some((scalar_to_bytes(&r), scalar_to_bytes(&s)))
 }
@@ -152,7 +149,13 @@ pub fn ecdsa_verify_bytes(
     s_bytes: [u8; 32],
     msg_hash: [u8; 32],
 ) -> bool {
-    let r = Scalar::from_bytes_mod_order(r_bytes);
-    let s = Scalar::from_bytes_mod_order(s_bytes);
+    let r = match Scalar::from_bytes_canonical(r_bytes) {
+        Some(r) => r,
+        None => return false,
+    };
+    let s = match Scalar::from_bytes_canonical(s_bytes) {
+        Some(s) => s,
+        None => return false,
+    };
     ecdsa_verify(pk, (r, s), msg_hash)
 }

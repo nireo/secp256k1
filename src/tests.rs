@@ -8,8 +8,16 @@ fn negate_point(p: &Point) -> Point {
     }
 
     let (x, y) = p.to_affine().expect("not infinity");
-    let neg_y = FieldElement::ZERO - y;
-    Point::new(x, neg_y)
+    Point::new(x, -y)
+}
+
+fn limbs_to_be_bytes(limbs: &[u64; 4]) -> [u8; 32] {
+    let mut out = [0u8; 32];
+    out[0..8].copy_from_slice(&limbs[3].to_be_bytes());
+    out[8..16].copy_from_slice(&limbs[2].to_be_bytes());
+    out[16..24].copy_from_slice(&limbs[1].to_be_bytes());
+    out[24..32].copy_from_slice(&limbs[0].to_be_bytes());
+    out
 }
 
 #[test]
@@ -142,6 +150,38 @@ fn test_scalar_from_bytes_reduces() {
     }
     let one = Scalar::from_bytes_mod_order(bytes);
     assert_eq!(one, Scalar::ONE);
+}
+
+#[test]
+fn test_scalar_from_bytes_canonical_rejects_high() {
+    let n_bytes = limbs_to_be_bytes(&ORDER);
+    assert!(Scalar::from_bytes_canonical(n_bytes).is_none());
+
+    let n_minus_one_limbs = Scalar::sub_limbs(&ORDER, &[1, 0, 0, 0]);
+    let n_minus_one_bytes = limbs_to_be_bytes(&n_minus_one_limbs);
+    assert!(Scalar::from_bytes_canonical(n_minus_one_bytes).is_some());
+}
+
+#[test]
+fn test_generate_keypair_rejects_non_canonical_secret() {
+    let n_bytes = limbs_to_be_bytes(&ORDER);
+    assert!(generate_keypair(n_bytes).is_none());
+}
+
+#[test]
+fn test_ecdsa_verify_bytes_rejects_non_canonical_sig() {
+    let g = Point::generator();
+    let pk = g.mul_scalar(&Scalar::ONE);
+    let msg = Sha256::digest(b"invalid encoding");
+    let mut r_bytes = limbs_to_be_bytes(&ORDER); // non-canonical (== n)
+    let mut s_bytes = [0u8; 32];
+    s_bytes[31] = 1;
+    assert!(!ecdsa_verify_bytes(&pk, r_bytes, s_bytes, msg.into()));
+
+    // s >= n should also be rejected
+    r_bytes[31] = 1;
+    let s_bad = limbs_to_be_bytes(&ORDER);
+    assert!(!ecdsa_verify_bytes(&pk, r_bytes, s_bad, msg.into()));
 }
 
 #[test]

@@ -1,5 +1,5 @@
 use std::fmt;
-use std::ops::{Add, Mul, Sub};
+use std::ops::{Add, Mul, Neg, Sub};
 
 // n = FFFFFFFF FFFFFFFF FFFFFFFF FFFFFFFE BAAEDCE6 AF48A03B BFD25E8C D0364141
 pub(crate) const ORDER: [u64; 4] = [
@@ -216,6 +216,32 @@ impl Scalar {
     pub fn is_zero(&self) -> bool {
         self.limbs == [0; 4]
     }
+
+    /// Interpret 32 bytes (big-endian) as a scalar, rejecting non-canonical values.
+    /// Returns None if the value is >= n.
+    pub fn from_bytes_canonical(bytes: [u8; 32]) -> Option<Self> {
+        let limbs = [
+            u64::from_be_bytes(bytes[24..32].try_into().unwrap()),
+            u64::from_be_bytes(bytes[16..24].try_into().unwrap()),
+            u64::from_be_bytes(bytes[8..16].try_into().unwrap()),
+            u64::from_be_bytes(bytes[0..8].try_into().unwrap()),
+        ];
+
+        if Self::is_ge(&limbs, &ORDER) {
+            return None;
+        }
+
+        Some(Self::from_int(limbs))
+    }
+
+    /// Strict parse that also rejects zero
+    pub fn from_bytes_nonzero(bytes: [u8; 32]) -> Option<Self> {
+        let s = Self::from_bytes_canonical(bytes)?;
+        if s.is_zero() {
+            return None;
+        }
+        Some(s)
+    }
 }
 
 impl Add for Scalar {
@@ -256,6 +282,18 @@ impl Mul for Scalar {
     }
 }
 
+impl Neg for Scalar {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        if self == Self::ZERO {
+            Self::ZERO
+        } else {
+            Self::new(Self::sub_limbs(&ORDER, &self.limbs))
+        }
+    }
+}
+
 impl fmt::Debug for Scalar {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let val = self.to_int();
@@ -267,11 +305,9 @@ impl fmt::Debug for Scalar {
     }
 }
 
-/// Big-endian 32-byte encoding of a scalar in canonical form (non-Montgomery).
 pub fn scalar_to_bytes(s: &Scalar) -> [u8; 32] {
     let limbs = s.to_int();
     let mut out = [0u8; 32];
-    // limbs are stored little-endian; emit big-endian bytes most-significant limb first
     out[0..8].copy_from_slice(&limbs[3].to_be_bytes());
     out[8..16].copy_from_slice(&limbs[2].to_be_bytes());
     out[16..24].copy_from_slice(&limbs[1].to_be_bytes());
