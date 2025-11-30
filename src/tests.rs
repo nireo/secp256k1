@@ -8,7 +8,7 @@ fn negate_point(p: &Point) -> Point {
     }
 
     let (x, y) = p.to_affine().expect("not infinity");
-    Point::new(x, -y)
+    Point::new(x, -y).unwrap()
 }
 
 fn limbs_to_be_bytes(limbs: &[u64; 4]) -> [u8; 32] {
@@ -227,6 +227,37 @@ fn test_generator_coordinates() {
 
     assert_eq!(x.to_int(), expected_x);
     assert_eq!(y.to_int(), expected_y);
+}
+
+#[test]
+fn test_from_sec1_generator_compressed() {
+    let g = Point::generator();
+    let (x, y) = g.to_affine().unwrap();
+    let mut bytes = [0u8; 33];
+    bytes[0] = if y.is_odd() { 0x03 } else { 0x02 };
+    bytes[1..].copy_from_slice(&field_to_bytes(&x));
+
+    let decoded = Point::from_sec1(&bytes).expect("compressed generator should decode");
+    assert_eq!(decoded, g);
+}
+
+#[test]
+fn test_from_sec1_generator_uncompressed() {
+    let g = Point::generator();
+    let (x, y) = g.to_affine().unwrap();
+    let mut bytes = [0u8; 65];
+    bytes[0] = 0x04;
+    bytes[1..33].copy_from_slice(&field_to_bytes(&x));
+    bytes[33..].copy_from_slice(&field_to_bytes(&y));
+
+    let decoded = Point::from_sec1(&bytes).expect("uncompressed generator should decode");
+    assert_eq!(decoded, g);
+}
+
+#[test]
+fn test_from_sec1_rejects_invalid_encodings() {
+    assert!(Point::from_sec1(&[0x02]).is_none(), "compressed length");
+    assert!(Point::from_sec1(&[0x00, 0x00]).is_none(), "infinity must be 1 byte");
 }
 
 #[test]

@@ -221,10 +221,10 @@ impl Scalar {
     /// Returns None if the value is >= n.
     pub fn from_bytes_canonical(bytes: [u8; 32]) -> Option<Self> {
         let limbs = [
-            u64::from_be_bytes(bytes[24..32].try_into().unwrap()),
-            u64::from_be_bytes(bytes[16..24].try_into().unwrap()),
-            u64::from_be_bytes(bytes[8..16].try_into().unwrap()),
-            u64::from_be_bytes(bytes[0..8].try_into().unwrap()),
+            u64::from_be_bytes(bytes[24..32].try_into().ok()?),
+            u64::from_be_bytes(bytes[16..24].try_into().ok()?),
+            u64::from_be_bytes(bytes[8..16].try_into().ok()?),
+            u64::from_be_bytes(bytes[0..8].try_into().ok()?),
         ];
 
         if Self::is_ge(&limbs, &ORDER) {

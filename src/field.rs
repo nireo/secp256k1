@@ -82,6 +82,24 @@ impl FieldElement {
         self.pow(&p_minus_2)
     }
 
+    /// Compute a square root using the fact that p ≡ 3 (mod 4): sqrt(x) = x^((p+1)/4).
+    /// Returns None when no square root exists.
+    pub fn sqrt(&self) -> Option<Self> {
+        // (p + 1) / 4
+        let exponent = [
+            0xFFFFFFFFBFFFFF0C,
+            0xFFFFFFFFFFFFFFFF,
+            0xFFFFFFFFFFFFFFFF,
+            0x3FFFFFFFFFFFFFFF,
+        ];
+        let root = self.pow(&exponent);
+        if root.square() == *self {
+            Some(root)
+        } else {
+            None
+        }
+    }
+
     /// pow performs binary exponentation this keeps the value in montgomery form
     fn pow(&self, exponent: &[u64; 4]) -> Self {
         let mut res = Self::ONE;
@@ -189,6 +207,7 @@ impl FieldElement {
         result
     }
 
+    /// is_ge returns if a is larger or equal to b
     fn is_ge(a: &[u64; 4], b: &[u64; 4]) -> bool {
         for i in (0..4).rev() {
             if a[i] > b[i] {
@@ -199,6 +218,27 @@ impl FieldElement {
             }
         }
         true
+    }
+
+    pub fn from_bytes(b: &[u8; 32]) -> Option<Self> {
+        let x: [u64; 4] = [
+            u64::from_be_bytes(b[24..32].try_into().ok()?),
+            u64::from_be_bytes(b[16..24].try_into().ok()?),
+            u64::from_be_bytes(b[8..16].try_into().ok()?),
+            u64::from_be_bytes(b[0..8].try_into().ok()?),
+        ];
+
+        if Self::is_ge(&x, &MODULUS) {
+            return None;
+        }
+
+        // we still need to convert x into montgomery form
+        Some(Self::from_int(x))
+    }
+
+    pub fn is_odd(&self) -> bool {
+        let limbs = self.to_int();
+        (limbs[0] & 1) == 1
     }
 }
 

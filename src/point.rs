@@ -37,7 +37,7 @@ impl Point {
         }
     }
 
-    pub fn new(x: FieldElement, y: FieldElement) -> Self {
+    pub fn new(x: FieldElement, y: FieldElement) -> Option<Self> {
         // points should satisfy the equation
         // y^2 = x^3 + 7
         let lhs = y.square();
@@ -50,11 +50,11 @@ impl Point {
             panic!("Point is not on secp256k1 curve!");
         }
 
-        Self {
+        Some(Self {
             x,
             y,
             z: FieldElement::ONE,
-        }
+        })
     }
 
     // convert jacobian point to affine
@@ -174,6 +174,52 @@ impl Point {
             x: x_prime,
             y: y_prime,
             z: z_prime,
+        }
+    }
+
+    pub fn from_sec1(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() == 0 {
+            return None;
+        }
+
+        let kind = bytes[0];
+        match kind {
+            0x00 => {
+                if bytes.len() == 1 {
+                    Some(Point::INFINITY)
+                } else {
+                    None
+                }
+            }
+            0x02 | 0x03 => {
+                if bytes.len() != 33 {
+                    return None;
+                }
+
+                let x = FieldElement::from_bytes(bytes[1..33].try_into().ok()?)?;
+
+                let rhs = x.square() * x + FieldElement::from_int([7, 0, 0, 0]);
+                let mut y = rhs.sqrt()?;
+
+                // Select the y with the correct parity for the encoding.
+                if y.is_odd() != (kind == 0x03) {
+                    y = -y;
+                }
+
+                Point::new(x, y)
+            }
+            0x04 => {
+                if bytes.len() != 65 {
+                    return None;
+                }
+
+                let x = FieldElement::from_bytes(bytes[1..33].try_into().ok()?)?;
+                let y = FieldElement::from_bytes(bytes[33..65].try_into().ok()?)?;
+
+                // this also validates the point equation to be correct
+                Point::new(x, y)
+            }
+            _ => return None, // invalid
         }
     }
 
