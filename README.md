@@ -24,3 +24,12 @@ fn main() {
 ## Testing
 
 Run `cargo test` from the project root to exercise arithmetic, point operations, and ECDSA checks.
+
+## Constants
+
+Magic constants (Montgomery parameters, curve order data, and generator limbs) can be recomputed with:
+
+```
+python3 scripts/generate_constants.py
+```
+
