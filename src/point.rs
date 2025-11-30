@@ -44,10 +44,7 @@ impl Point {
         let rhs = x.square() * x + FieldElement::from_int([7, 0, 0, 0]);
 
         if lhs != rhs {
-            println!("Curve Equation Check Failed:");
-            println!("LHS (y^2):   {:?}", lhs);
-            println!("RHS (x^3+7): {:?}", rhs);
-            panic!("Point is not on secp256k1 curve!");
+            return None;
         }
 
         Some(Self {
