@@ -257,7 +257,10 @@ fn test_from_sec1_generator_uncompressed() {
 #[test]
 fn test_from_sec1_rejects_invalid_encodings() {
     assert!(Point::from_sec1(&[0x02]).is_none(), "compressed length");
-    assert!(Point::from_sec1(&[0x00, 0x00]).is_none(), "infinity must be 1 byte");
+    assert!(
+        Point::from_sec1(&[0x00, 0x00]).is_none(),
+        "infinity must be 1 byte"
+    );
 }
 
 #[test]
@@ -312,4 +315,26 @@ fn test_ecdsa_sign_low_s() {
         "s should be in low half of order"
     );
     assert!(!Scalar::is_ge(&r.to_int(), &ORDER));
+}
+
+#[test]
+fn test_field_element_from_bytes() {
+    let fe = FieldElement::from_int([7, 0, 0, 0]);
+    let by = fe.to_bytes();
+    let fe_got = FieldElement::from_bytes(&by).unwrap();
+
+    assert!(fe_got == fe)
+}
+
+#[test]
+fn test_sec1_encoding_roundtrip() {
+    let g = Point::generator();
+
+    let compressed = g.to_sec1(true);
+    let decompressed = Point::from_sec1(&compressed).expect("should decode compressed");
+    assert_eq!(decompressed, g, "compressed sec1 roundtrip");
+
+    let uncompressed = g.to_sec1(false);
+    let decompressed = Point::from_sec1(&uncompressed).expect("should decode uncompressed");
+    assert_eq!(decompressed, g, "uncompressed sec1 roundtrip");
 }

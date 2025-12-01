@@ -115,6 +115,7 @@ pub fn ecdsa_verify(pk: &Point, sig: (Scalar, Scalar), msg_hash: [u8; 32]) -> bo
     if r.is_zero() || s.is_zero() {
         return false;
     }
+
     let r_int = r.to_int();
     let s_int = s.to_int();
     if Scalar::is_ge(&r_int, &ORDER) || Scalar::is_ge(&s_int, &ORDER) {

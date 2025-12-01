@@ -174,6 +174,31 @@ impl Point {
         }
     }
 
+    /// to_sec1 encodes the point into bytes it can then also be decoded using the `from_sec1`
+    /// function. The compress parameter describes wether the point only contains x or if it
+    /// contains x and y.
+    ///
+    /// compress: true  | res.len() == 33  | only x encoding and the type byte
+    /// compress: false | res.len() == 65 | type encoding + x + y
+    pub fn to_sec1(&self, compress: bool) -> Vec<u8> {
+        if compress {
+            let mut res = vec![0u8; 33];
+            res[0] = if self.y.is_odd() { 0x03 } else { 0x02 };
+            res[1..33].copy_from_slice(&self.x.to_bytes());
+
+            res
+        } else {
+            let mut res = vec![0u8; 65];
+            res[0] = 0x04;
+            res[1..33].copy_from_slice(&self.x.to_bytes());
+            res[33..65].copy_from_slice(&self.y.to_bytes());
+
+            res
+        }
+    }
+
+    /// from_sec1 decodes a point from bytes encoded in the SEC1 standard. It supports both
+    /// compressed and uncompressed formats. However, it does not support hybrid encodings.
     pub fn from_sec1(bytes: &[u8]) -> Option<Self> {
         if bytes.len() == 0 {
             return None;

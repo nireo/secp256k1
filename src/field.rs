@@ -236,6 +236,19 @@ impl FieldElement {
         Some(Self::from_int(x))
     }
 
+    /// to_bytes converts a field element in to big endian bytes and normal form
+    pub fn to_bytes(&self) -> [u8; 32] {
+        let mut res = [0u8; 32];
+
+        let x = self.to_int();
+        res[0..8].copy_from_slice(&x[3].to_be_bytes());
+        res[8..16].copy_from_slice(&x[2].to_be_bytes());
+        res[16..24].copy_from_slice(&x[1].to_be_bytes());
+        res[24..32].copy_from_slice(&x[0].to_be_bytes());
+
+        res
+    }
+
     pub fn is_odd(&self) -> bool {
         let limbs = self.to_int();
         (limbs[0] & 1) == 1
