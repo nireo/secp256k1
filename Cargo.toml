@@ -6,3 +6,6 @@ edition = "2024"
 [dependencies]
 sha2 = "0.10"
 hmac = "0.12"
+
+[dev-dependencies]
+secp256k1_ref = { package = "secp256k1", version = "0.28" }

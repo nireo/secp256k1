@@ -1,6 +1,7 @@
 use super::*;
 use crate::scalar::{ORDER, ORDER_HALF};
 use sha2::{Digest, Sha256};
+use secp256k1_ref as secp_ref;
 
 fn negate_point(p: &Point) -> Point {
     if p == &Point::INFINITY {
@@ -17,6 +18,15 @@ fn limbs_to_be_bytes(limbs: &[u64; 4]) -> [u8; 32] {
     out[8..16].copy_from_slice(&limbs[2].to_be_bytes());
     out[16..24].copy_from_slice(&limbs[1].to_be_bytes());
     out[24..32].copy_from_slice(&limbs[0].to_be_bytes());
+    out
+}
+
+fn point_to_uncompressed_bytes(point: &Point) -> [u8; 65] {
+    let (x, y) = point.to_affine().expect("point should be affine");
+    let mut out = [0u8; 65];
+    out[0] = 0x04;
+    out[1..33].copy_from_slice(&field_to_bytes(&x));
+    out[33..65].copy_from_slice(&field_to_bytes(&y));
     out
 }
 
@@ -337,4 +347,59 @@ fn test_sec1_encoding_roundtrip() {
     let uncompressed = g.to_sec1(false);
     let decompressed = Point::from_sec1(&uncompressed).expect("should decode uncompressed");
     assert_eq!(decompressed, g, "uncompressed sec1 roundtrip");
+}
+
+#[test]
+fn test_public_key_matches_secp256k1_ref() {
+    let sk_bytes = [0x11u8; 32];
+    let sk = Scalar::from_bytes_nonzero(sk_bytes).expect("valid secret key");
+    let pk = Point::generator().mul_scalar(&sk);
+
+    let secp = secp_ref::Secp256k1::new();
+    let ref_sk = secp_ref::SecretKey::from_slice(&sk_bytes).expect("ref secret key");
+    let ref_pk = secp_ref::PublicKey::from_secret_key(&secp, &ref_sk);
+    let ref_bytes = ref_pk.serialize_uncompressed();
+
+    assert_eq!(point_to_uncompressed_bytes(&pk), ref_bytes);
+}
+
+#[test]
+fn test_ecdsa_sign_verifies_with_secp256k1_ref() {
+    let sk_bytes = [0x22u8; 32];
+    let sk = Scalar::from_bytes_nonzero(sk_bytes).expect("valid secret key");
+    let msg_hash: [u8; 32] = Sha256::digest(b"cross verify ours -> ref").into();
+
+    let (r, s) = ecdsa_sign(&sk, msg_hash).expect("signature");
+    let mut sig_bytes = [0u8; 64];
+    sig_bytes[0..32].copy_from_slice(&scalar_to_bytes(&r));
+    sig_bytes[32..64].copy_from_slice(&scalar_to_bytes(&s));
+
+    let secp = secp_ref::Secp256k1::new();
+    let ref_sk = secp_ref::SecretKey::from_slice(&sk_bytes).expect("ref secret key");
+    let ref_pk = secp_ref::PublicKey::from_secret_key(&secp, &ref_sk);
+    let msg = secp_ref::Message::from_slice(&msg_hash).expect("msg");
+    let sig = secp_ref::ecdsa::Signature::from_compact(&sig_bytes).expect("sig");
+
+    assert!(secp.verify_ecdsa(&msg, &sig, &ref_pk).is_ok());
+}
+
+#[test]
+fn test_ecdsa_verify_accepts_secp256k1_ref_signature() {
+    let sk_bytes = [0x33u8; 32];
+    let msg_hash: [u8; 32] = Sha256::digest(b"cross verify ref -> ours").into();
+
+    let secp = secp_ref::Secp256k1::new();
+    let ref_sk = secp_ref::SecretKey::from_slice(&sk_bytes).expect("ref secret key");
+    let msg = secp_ref::Message::from_slice(&msg_hash).expect("msg");
+    let sig = secp.sign_ecdsa(&msg, &ref_sk);
+    let sig_bytes = sig.serialize_compact();
+
+    let mut r = [0u8; 32];
+    let mut s = [0u8; 32];
+    r.copy_from_slice(&sig_bytes[0..32]);
+    s.copy_from_slice(&sig_bytes[32..64]);
+
+    let sk = Scalar::from_bytes_nonzero(sk_bytes).expect("valid secret key");
+    let pk = Point::generator().mul_scalar(&sk);
+    assert!(ecdsa_verify_bytes(&pk, r, s, msg_hash));
 }
